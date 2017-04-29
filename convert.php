@@ -10,7 +10,8 @@ include 'class/Converter.php';
 error_reporting(0);
 
 echo "\nLoading given template\n";
-$obj = Converter::loadBasicTemplate();
+$obj_nt = Converter::loadBasicTemplate();
+$obj_wt = Converter::loadBasicTemplate();
 
 // Parse pdf file and build necessary objects.
 $parser = new \Smalot\PdfParser\Parser();
@@ -34,24 +35,53 @@ foreach($files as $input_file)
     // Retrieve all pages from the pdf file.
     $pages  = $pdf->getPages();
     
+    $i++;
     // Loop over each page to extract text and add to the required xlsx file.
+    $data_exp = [];
     foreach ($pages as $page) 
     {
-        $i++;
         $data = $page->getText();
-
-        $data_exp = explode('|', $data);
-        $str = $data_exp[1];
-        $str = str_replace("Valid for Effective Dates: ","",$str);
-
-        // Adding the data to the output file
-        $obj = Converter::addData($data_exp, $obj, $i);
+        $data_exp = array_merge($data_exp, explode('|', $data));
     }
+    $isSpecial = false;
+    //echo $data_exp[9][0]; die;
+    if($data_exp[9][0] != 'P')
+    {
+        $temp = array_slice($data_exp, 0, 9);
+        $temp[9] = "Special Case";
+        $data_exp = array_merge($temp, array_slice($data_exp, 9));
+        
+        $temp = array_slice($data_exp, 0, 74);
+        $temp = array_merge($temp, array_slice($data_exp, 77, 64));
+        $temp = array_merge($temp, [0 => "Special Case"]);
+        $temp = array_merge($temp, array_slice($data_exp, 74, 3));
+        $temp = array_merge($temp, array_slice($data_exp, 145, 6));
+        $temp = array_merge($temp, array_slice($data_exp, 141, 3));
+        $data_exp = array_merge($temp, array_slice($data_exp, 151, 3));
+        $isSpecial = true;
+    }
+    // echo "<pre>";
+    // print_r($data_exp);
+    // die;
+
+    foreach($data_exp as &$str)
+    {
+        $str = str_replace(",", "", $str);
+    }
+    // Adding the data to the output file
+    $obj_nt = Converter::addNonTobaccoData($data_exp, $obj_nt, $i, $isSpecial);
+    $obj_wt = Converter::addTobaccoData($data_exp, $obj_wt, $i, $isSpecial);
 }
 
-$filename= "Output/output.xlsx";
+$filename= "Output/output_non_tobacco.xlsx";
 
-$objWriter = PHPExcel_IOFactory::createWriter($obj, 'Excel2007');
+$objWriter = PHPExcel_IOFactory::createWriter($obj_nt, 'Excel2007');
+$objWriter->save($filename);
+
+
+$filename= "Output/output_with_tobacco.xlsx";
+
+$objWriter = PHPExcel_IOFactory::createWriter($obj_wt, 'Excel2007');
 $objWriter->save($filename);
  
 echo "Process Completed\n";
